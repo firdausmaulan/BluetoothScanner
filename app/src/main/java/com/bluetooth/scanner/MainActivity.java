@@ -10,9 +10,9 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.Message;
 import android.os.ParcelUuid;
 import android.util.Log;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -27,12 +27,14 @@ public class MainActivity extends AppCompatActivity {
     private BluetoothAdapter bluetoothAdapter;
     private String btScan = android.Manifest.permission.BLUETOOTH_SCAN;
     private String btConnect = android.Manifest.permission.BLUETOOTH_CONNECT;
+    private TextView tvResult;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        requestPermission();
+        tvResult = findViewById(R.id.tv_result);
+        new Handler(Looper.getMainLooper()).postDelayed(this::requestPermission, 1000);
     }
 
     private void requestPermission() {
@@ -85,14 +87,23 @@ public class MainActivity extends AppCompatActivity {
                         ParcelUuid[] uuid = device.getUuids();
                         BluetoothSocket socket = device.createInsecureRfcommSocketToServiceRecord(uuid[0].getUuid());
                         socket.connect();
-                        new MyBluetoothService(socket, new Handler(Looper.getMainLooper()) {
+                        new Thread() {
                             @Override
-                            public void handleMessage(@NonNull Message msg) {
-                                super.handleMessage(msg);
-                                Log.d(TAG, "message : " + msg);
-                                Toast.makeText(MainActivity.this, "message : " + msg, Toast.LENGTH_SHORT).show();
+                            public void run() {
+                                super.run();
+                                new MyBluetoothService(socket, new MyBluetoothService.Listener() {
+                                    @Override
+                                    public void onReceive(String data) {
+                                        showResult(data);
+                                    }
+
+                                    @Override
+                                    public void onSend(String data) {
+                                        showResult(data);
+                                    }
+                                });
                             }
-                        });
+                        }.start();
                         Toast.makeText(this, "Socket connected", Toast.LENGTH_SHORT).show();
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -101,5 +112,13 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }
+    }
+
+    private void showResult(String data) {
+        runOnUiThread(() -> {
+            Log.d(TAG, "message : " + data);
+            Toast.makeText(MainActivity.this, "message : " + data, Toast.LENGTH_SHORT).show();
+            tvResult.setText(data);
+        });
     }
 }

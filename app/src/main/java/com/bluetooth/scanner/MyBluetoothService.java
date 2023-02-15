@@ -1,18 +1,23 @@
 package com.bluetooth.scanner;
 
 import android.bluetooth.BluetoothSocket;
-import android.os.Bundle;
-import android.os.Handler;
-import android.os.Message;
 import android.util.Log;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 
 public class MyBluetoothService {
     private static final String TAG = "SimpleBluetooth";
-    private final Handler handler; // handler that gets info from Bluetooth service
+
+    public interface Listener {
+        void onReceive(String data);
+
+        void onSend(String data);
+    }
+
+    private Listener listener;
 
     // Defines several constants used when transmitting messages between the
     // service and the UI.
@@ -22,8 +27,8 @@ public class MyBluetoothService {
         public static final int MESSAGE_TOAST = 2;
     }
 
-    public MyBluetoothService(BluetoothSocket socket, Handler handler){
-        this.handler = handler;
+    public MyBluetoothService(BluetoothSocket socket, Listener listener) {
+        this.listener = listener;
         new ConnectedThread(socket);
     }
 
@@ -68,10 +73,7 @@ public class MyBluetoothService {
                     final String incomingMessage = new String(mmBuffer, 0, numBytes);
                     Log.d(TAG, "incomingMessage: " + incomingMessage);
                     // Send the obtained bytes to the UI activity.
-                    Message readMsg = handler.obtainMessage(
-                            MessageConstants.MESSAGE_READ, numBytes, -1,
-                            mmBuffer);
-                    readMsg.sendToTarget();
+                    listener.onReceive(incomingMessage);
                 } catch (IOException e) {
                     Log.d(TAG, "Input stream was disconnected", e);
                     break;
@@ -83,18 +85,12 @@ public class MyBluetoothService {
         public void write(byte[] bytes) {
             try {
                 mmOutStream.write(bytes);
+                String outcomeMessage = new String(bytes, StandardCharsets.UTF_8);
+                Log.d(TAG, "outcomeMessage: " + outcomeMessage);
                 // Share the sent message with the UI activity.
-                Message writtenMsg = handler.obtainMessage(
-                        MessageConstants.MESSAGE_WRITE, -1, -1, mmBuffer);
-                writtenMsg.sendToTarget();
+                listener.onSend(outcomeMessage);
             } catch (IOException e) {
                 Log.e(TAG, "Error occurred when sending data", e);
-                // Send a failure message back to the activity.
-                Message writeErrorMsg = handler.obtainMessage(MessageConstants.MESSAGE_TOAST);
-                Bundle bundle = new Bundle();
-                bundle.putString("toast", "Couldn't send data to the other device");
-                writeErrorMsg.setData(bundle);
-                handler.sendMessage(writeErrorMsg);
             }
         }
 
